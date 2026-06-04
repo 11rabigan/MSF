@@ -2,49 +2,452 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MSF World Refugee Map</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; }
+        * { box-sizing: border-box; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
         #map { height: 100vh; width: 100%; }
 
+        /* ── Legend ── */
         .legend {
             background: white;
-            padding: 12px 16px;
+            padding: 10px 14px;
             border-radius: 6px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.15);
             font-family: 'DM Sans', sans-serif;
-            font-size: 12px;
+            font-size: 11px;
             line-height: 1.5;
+            max-width: 180px;
         }
         .legend h4 {
-            margin: 0 0 8px 0;
-            font-size: 13px;
+            margin: 0 0 6px 0;
+            font-size: 12px;
             font-weight: 600;
         }
         .legend-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 6px;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .legend-item span { margin-left: 2px; }
+
+        /* ── Intro overlay ── */
+        #intro-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.65);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
 
-        .legend-item span {
-            margin-left: 4px;
+        #intro-box {
+            background: white;
+            padding: 32px 28px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 460px;
+            text-align: center;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        #intro-box h1 {
+            margin: 0 0 14px 0;
+            font-size: clamp(20px, 5vw, 26px);
+            color: #E56C57;
+            line-height: 1.2;
+        }
+
+        #intro-box p {
+            color: #444;
+            line-height: 1.6;
+            margin-bottom: 10px;
+            font-size: clamp(13px, 3.5vw, 15px);
+        }
+
+        #intro-btn {
+            margin-top: 18px;
+            padding: 13px 32px;
+            background: #E56C57;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: clamp(14px, 4vw, 16px);
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            max-width: 280px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        #intro-btn:hover, #intro-btn:active {
+            background: #c9503d;
+        }
+
+        /* ── Mobile bottom sheet for popups ── */
+        #mobile-sheet {
+            display: none;
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: white;
+            border-radius: 16px 16px 0 0;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+            z-index: 1500;
+            padding: 0 20px 32px;
+            font-family: 'DM Sans', sans-serif;
+            max-height: 70vh;
+            overflow-y: auto;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+        }
+
+        #mobile-sheet.open {
+            transform: translateY(0);
+        }
+
+        #sheet-handle {
+            width: 40px;
+            height: 4px;
+            background: #ddd;
+            border-radius: 2px;
+            margin: 12px auto 16px;
+        }
+
+        #sheet-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #sheet-content h3 {
+            margin: 0 0 6px;
+            font-size: 18px;
+            color: #222;
+        }
+
+        #sheet-content .refugee-count {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+
+        #sheet-content img {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        #sheet-content a {
+            display: block;
+            text-align: center;
+            background: #E56C57;
+            color: white;
+            text-decoration: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        /* ── Legend toggle button (mobile) ── */
+        #legend-toggle {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 16px;
+            z-index: 1000;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            font-size: 18px;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #legend-panel {
+            display: none;
+            position: fixed;
+            bottom: 72px;
+            right: 16px;
+            z-index: 1000;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+            padding: 12px 14px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            max-width: 200px;
+        }
+
+        #legend-panel h4 {
+            margin: 0 0 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        #legend-panel .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        /* ── Layer toggle drawer (mobile) ── */
+        #layer-toggle-btn {
+            display: none;
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 1000;
+            background: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            gap: 6px;
+            align-items: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #layer-drawer {
+            display: none;
+            position: fixed;
+            top: 56px;
+            right: 16px;
+            z-index: 1000;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+            padding: 10px 14px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            min-width: 200px;
+        }
+
+        #layer-drawer h4 {
+            margin: 0 0 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .layer-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 7px 0;
+            border-bottom: 1px solid #f0f0f0;
+            gap: 12px;
+        }
+
+        .layer-row:last-child { border-bottom: none; }
+
+        .layer-row label {
+            font-size: 13px;
+            color: #333;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        /* Toggle switch */
+        .toggle-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #ccc;
+            border-radius: 20px;
+            transition: 0.2s;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px; width: 14px;
+            left: 3px; bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.2s;
+        }
+
+        input:checked + .toggle-slider { background: #E56C57; }
+        input:checked + .toggle-slider:before { transform: translateX(16px); }
+
+        /* ── Responsive breakpoint ── */
+        @media (max-width: 640px) {
+            /* Hide Leaflet's built-in layer control on mobile */
+            .leaflet-control-layers { display: none !important; }
+
+            #legend-toggle { display: flex; }
+            #layer-toggle-btn { display: flex; }
+
+            /* On mobile the legend is handled by #legend-panel */
+            .leaflet-control.legend { display: none !important; }
+        }
+
+        @media (min-width: 641px) {
+            #legend-panel, #legend-toggle, #layer-toggle-btn, #layer-drawer { display: none !important; }
         }
     </style>
 </head>
 <body>
+
+    <!-- Intro overlay -->
+    <div id="intro-overlay">
+        <div id="intro-box">
+            <h1>MSF World Refugee Map</h1>
+            <p>This map shows refugee displacement origins worldwide and where Médecins Sans Frontières (MSF) operates.</p>
+            <p>Tap orange bubbles to learn more about major refugee crises.</p>
+            <p>Use the layers button to toggle refugee data for all countries.</p>
+            <button id="intro-btn" onclick="closeIntro()">Explore the Map</button>
+        </div>
+    </div>
+
+    <!-- Mobile bottom sheet -->
+    <div id="mobile-sheet">
+        <div id="sheet-handle"></div>
+        <button id="sheet-close" onclick="closeSheet()">✕</button>
+        <div id="sheet-content"></div>
+    </div>
+
+    <!-- Mobile legend toggle -->
+    <button id="legend-toggle" onclick="toggleLegend()">🗺</button>
+    <div id="legend-panel"></div>
+
+    <!-- Mobile layer toggle -->
+    <button id="layer-toggle-btn" onclick="toggleLayerDrawer()">⊞ Layers</button>
+    <div id="layer-drawer">
+        <h4>Map Layers</h4>
+        <div class="layer-row">
+            <label for="toggle-all">All Countries</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="toggle-all" checked onchange="toggleLayer('all', this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="layer-row">
+            <label for="toggle-msf">MSF Locations</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="toggle-msf" checked onchange="toggleLayer('msf', this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="layer-row">
+            <label for="toggle-majors">Major Origins</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="toggle-majors" checked onchange="toggleLayer('majors', this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="layer-row">
+            <label for="toggle-bubbles">All Origins</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="toggle-bubbles" onchange="toggleLayer('bubbles', this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+    </div>
+
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
 
+        const isMobile = () => window.innerWidth <= 640;
+
+        let legendControl = null;
+        let layers = {};
+
+        function closeIntro() {
+            document.getElementById('intro-overlay').style.display = 'none';
+            if (!isMobile() && legendControl) legendControl.addTo(map);
+            if (isMobile()) buildMobileLegend();
+        }
+
+        function toggleLegend() {
+            const panel = document.getElementById('legend-panel');
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function toggleLayerDrawer() {
+            const drawer = document.getElementById('layer-drawer');
+            drawer.style.display = drawer.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function toggleLayer(name, visible) {
+            if (!layers[name]) return;
+            if (visible) map.addLayer(layers[name]);
+            else map.removeLayer(layers[name]);
+        }
+
+        // Close drawers when tapping map
+        document.getElementById('map').addEventListener('click', () => {
+            document.getElementById('layer-drawer').style.display = 'none';
+            document.getElementById('legend-panel').style.display = 'none';
+        });
+
+        function openSheet(country, count, imgUrl, linkUrl) {
+            const content = document.getElementById('sheet-content');
+            content.innerHTML = `
+                <h3>${country}</h3>
+                <p class="refugee-count">${count.toLocaleString()} refugees</p>
+                <img src="${imgUrl}" alt="${country}" />
+                <a href="${linkUrl}" target="_blank">Learn more about MSF ↗</a>
+            `;
+            const sheet = document.getElementById('mobile-sheet');
+            sheet.style.display = 'block';
+            requestAnimationFrame(() => sheet.classList.add('open'));
+        }
+
+        function closeSheet() {
+            const sheet = document.getElementById('mobile-sheet');
+            sheet.classList.remove('open');
+            setTimeout(() => sheet.style.display = 'none', 300);
+        }
+
         const MAX_ZOOM  = 6;
-        const BASE_ZOOM = 3;
+        const BASE_ZOOM = window.innerWidth <= 640 ? 2 : 3;
 
         const MSF_COUNTRIES = [
             "Armenia", "Bangladesh", "Afghanistan", "Belgium", "Benin",
@@ -64,13 +467,36 @@
             "Uzbekistan", "Venezuela", "Zambia", "Zimbabwe", "Yemen", "eSwatini"
         ];
 
-        const TOP_FIVE = ["Syria", "Afghanistan", "Ukraine", "South Sudan", "Sudan"];
+        const Major_Areas = ["Syria", "Afghanistan", "Ukraine", "South Sudan", "Sudan", "Myanmar"];
 
         const GEOJSON_URL  = 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson';
         const REFUGEES_URL = 'https://raw.githubusercontent.com/11rabigan/MSF/refs/heads/main/Refugee_Data_2024.json';
 
-        const map = L.map('map', { zoomSnap: 0.5, minZoom: 2, maxZoom: MAX_ZOOM })
-                     .setView([26, 45], BASE_ZOOM);
+        const COUNTRY_IMAGES = {
+            "Syria":       "https://raw.githubusercontent.com/11rabigan/MSF/refs/heads/main/MSB159566_Small.jpg",
+            "Afghanistan": "https://raw.githubusercontent.com/11rabigan/MSF/refs/heads/main/MSB246012_Small.jpg",
+            "Ukraine":     "https://raw.githubusercontent.com/11rabigan/MSF/refs/heads/main/MSB120565_Small.jpg",
+            "South Sudan": "https://raw.githubusercontent.com/11rabigan/MSF/refs/heads/main/MSB195709_Small.jpg",
+            "Sudan":       "https://raw.githubusercontent.com/11rabigan/MSF/refs/heads/main/MSB255683_Small.jpg",
+            "Myanmar":     "https://raw.githubusercontent.com/11rabigan/MSF/refs/heads/main/MSB240025_Small.jpg",
+        };
+
+        const COUNTRY_LINKS = {
+            "Syria":       "https://www.msf.org.tw/news/syria-hasakah-humanitarian-crisis",
+            "Afghanistan": "https://www.msf.org.tw/news/pakistan-forced-deportation-afghan-refugees-winter-health-crisis",
+            "Ukraine":     "https://www.msf.org.tw/news/ukraine-war-four-years",
+            "South Sudan": "https://www.msf.org.tw/news/sudan-children-deadly-risk-measles-and-malnutrition",
+            "Sudan":       "https://www.msf.org.tw/news/sudan-war-3-years-largest-humanitarian-crisis-14-million-displaced",
+            "Myanmar":     "https://www.msf.org.tw/news/bangladesh-spike-in-arrivals-of-rohingya-refugee",
+        };
+
+        const map = L.map('map', {
+            zoomSnap: 0.5,
+            minZoom: 2,
+            maxZoom: MAX_ZOOM,
+            tap: true,           // important for iOS
+            tapTolerance: 15,    // more forgiving tap on mobile
+        }).setView([20, 20], BASE_ZOOM);
 
         const baseMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> &copy; <a href="https://carto.com">CARTO</a>',
@@ -78,19 +504,13 @@
         }).addTo(map);
 
         const STYLE_ALL = {
-            fillColor: '#cccccc',
-            color: '#878787',
-            weight: 1,
-            fillOpacity: 0.3,
-            opacity: 0.5
+            fillColor: '#cccccc', color: '#878787',
+            weight: 1, fillOpacity: 0.3, opacity: 0.5
         };
 
         const STYLE_MSF = {
-            fillColor: '#E56C57',
-            color: '#E56C57',
-            weight: 0,
-            fillOpacity: 0.5,
-            opacity: 0
+            fillColor: '#E56C57', color: '#E56C57',
+            weight: 0, fillOpacity: 0.5, opacity: 0
         };
 
         Promise.all([
@@ -99,67 +519,67 @@
         ])
         .then(([geoData, refugeeData]) => {
 
-            const allCountriesLayer = L.geoJSON(geoData, {
-                style: () => STYLE_ALL
-            }).addTo(map);
-
-            const msfLayer = L.geoJSON(geoData, {
+            layers.all = L.geoJSON(geoData, { style: () => STYLE_ALL }).addTo(map);
+            layers.msf = L.geoJSON(geoData, {
                 filter: f => MSF_COUNTRIES.includes(f.properties.name),
                 style: () => STYLE_MSF
             }).addTo(map);
 
             const maxRefugees = Math.max(...refugeeData.features.map(f => f.properties.Refugees));
 
-            const top5Layer   = L.layerGroup().addTo(map);
-            const bubbleLayer = L.layerGroup();
+            layers.majors  = L.layerGroup().addTo(map);
+            layers.bubbles = L.layerGroup();
 
             refugeeData.features.forEach(f => {
                 const count = f.properties.Refugees;
                 if (count <= 0) return;
-                if (TOP_FIVE.includes(f.properties.Country_Name)) return;
+                if (Major_Areas.includes(f.properties.Country_Name)) return;
 
-                const lng = f.geometry.coordinates[0];
-                const lat = f.geometry.coordinates[1];
-
+                const [lng, lat] = f.geometry.coordinates;
                 L.circleMarker([lat, lng], {
-                    radius: Math.max(3, Math.sqrt(count / maxRefugees) * 25),
-                    fillColor: '#A03339',
-                    color: '#A03339',
-                    weight: 1,
-                    fillOpacity: 0.5
+                    radius: Math.max(4, Math.sqrt(count / maxRefugees) * 25),
+                    fillColor: '#A03339', color: '#A03339',
+                    weight: 1, fillOpacity: 0.5
                 })
                 .bindTooltip(`${f.properties.Country_Name}: ${count.toLocaleString()} refugees`)
-                .addTo(bubbleLayer);
+                .addTo(layers.bubbles);
             });
 
             refugeeData.features.forEach(f => {
-                if (!TOP_FIVE.includes(f.properties.Country_Name)) return;
+                if (!Major_Areas.includes(f.properties.Country_Name)) return;
 
                 const count = f.properties.Refugees;
-                const lng   = f.geometry.coordinates[0];
-                const lat   = f.geometry.coordinates[1];
+                const [lng, lat] = f.geometry.coordinates;
+                const name = f.properties.Country_Name;
 
-                L.circleMarker([lat, lng], {
-                    radius: Math.max(3, Math.sqrt(count / maxRefugees) * 25),
-                    fillColor: '#FF6B00',
-                    color: '#FF6B00',
-                    weight: 2,
-                    fillOpacity: 0.5
-                })
-                .bindPopup(`
-                    <b>${f.properties.Country_Name}</b><br>
-                    Refugees: ${count.toLocaleString()}<br>
-                    <img src="YOUR_IMAGE_URL" width="150"/><br>
-                    <a href="YOUR_LINK" target="_blank">Read more</a>
-                `)
-                .addTo(top5Layer);
+                const marker = L.circleMarker([lat, lng], {
+                    radius: Math.max(4, Math.sqrt(count / maxRefugees) * 25),
+                    fillColor: '#FF6B00', color: '#FF6B00',
+                    weight: 2, fillOpacity: 0.5
+                });
+
+                if (isMobile()) {
+                    // On mobile: tap opens bottom sheet instead of popup
+                    marker.on('click', () => {
+                        openSheet(name, count, COUNTRY_IMAGES[name], COUNTRY_LINKS[name]);
+                    });
+                } else {
+                    marker.bindPopup(`
+                        <b>${name}</b><br>
+                        Refugees: ${count.toLocaleString()}<br>
+                        <img src="${COUNTRY_IMAGES[name]}" width="150" style="border-radius:4px;margin-top:6px;"/><br>
+                        <a href="${COUNTRY_LINKS[name]}" target="_blank">Learn more about MSF</a>
+                    `);
+                }
+
+                marker.addTo(layers.majors);
             });
 
             // ── Legend ────────────────────────────────────────────────────────
+            const MAX_SVG_SIZE = 54;
+
             function buildLegendHTML() {
                 let html = '<h4>Refugees by Origin</h4>';
-
-                const MAX_SVG_SIZE = 54;
 
                 const tiers = [
                     { label: '5,000,000+', count: 5000000, color: '#A03339' },
@@ -176,68 +596,72 @@
                     html += `
                         <div class="legend-item">
                             <svg width="${MAX_SVG_SIZE}" height="${diameter + pad * 2}" style="flex-shrink:0">
-                                <circle
-                                    cx="${MAX_SVG_SIZE / 2}" cy="${r + pad}" r="${r}"
-                                    fill="${t.color}" fill-opacity="0.5"
-                                    stroke="${t.color}" stroke-width="1"
-                                />
+                                <circle cx="${MAX_SVG_SIZE / 2}" cy="${r + pad}" r="${r}"
+                                    fill="${t.color}" fill-opacity="0.5" stroke="${t.color}" stroke-width="1"/>
                             </svg>
                             <span>${t.label}</span>
                         </div>`;
-                    
-                    html += `<hr style="border:none; border-top:1px solid #eee; margin: 8px 0;">`;
-                    });
-                    html += `
-                        <div class="legend-item">
-                            <svg width="${MAX_SVG_SIZE}" height="24" style="flex-shrink:0">
-                                <circle
-                                    cx="${MAX_SVG_SIZE / 2}" cy="12" r="10"
-                                    fill="#FF6B00" fill-opacity="0.5"
-                                    stroke="#FF6B00" stroke-width="2"
-                                />
-                            </svg>
-                            <span>Major Displacement Origins</span>
-                        </div>`;
+                    html += `<hr style="border:none;border-top:1px solid #eee;margin:6px 0;">`;
+                });
 
-                html += `<hr style="border:none; border-top:1px solid #eee; margin: 8px 0;">`;
-                html += `<h4 style="margin: 0 0 8px 0;">MSF Operations</h4>`;
+                html += `
+                    <div class="legend-item">
+                        <svg width="${MAX_SVG_SIZE}" height="24" style="flex-shrink:0">
+                            <circle cx="${MAX_SVG_SIZE / 2}" cy="12" r="10"
+                                fill="#FF6B00" fill-opacity="0.5" stroke="#FF6B00" stroke-width="2"/>
+                        </svg>
+                        <span>Major Origins</span>
+                    </div>`;
+
+                html += `<hr style="border:none;border-top:1px solid #eee;margin:6px 0;">`;
+                html += `<h4 style="margin:0 0 6px 0;">MSF Operations</h4>`;
                 html += `
                     <div class="legend-item">
                         <svg width="${MAX_SVG_SIZE}" height="20" style="flex-shrink:0">
-                            <rect
-                                x="1" y="1" width="18" height="12"
-                                fill="#E56C57" fill-opacity="0.5"
-                                stroke="#E56C57" stroke-width="1"
-                            />
+                            <rect x="${MAX_SVG_SIZE / 2 - 9}" y="4" width="18" height="12"
+                                fill="#E56C57" fill-opacity="0.5" stroke="#E56C57" stroke-width="1"/>
                         </svg>
                         <span>MSF Operations</span>
                     </div>`;
-                
+
                 return html;
             }
 
-            const legend = L.control({ position: 'bottomright' });
-            legend.onAdd = function() {
+            // Desktop legend (Leaflet control)
+            legendControl = L.control({ position: 'bottomright' });
+            legendControl.onAdd = function() {
                 const div = L.DomUtil.create('div', 'legend');
                 div.innerHTML = buildLegendHTML();
                 return div;
             };
-            legend.addTo(map);
 
-            // ── Layer control ─────────────────────────────────────────────────
+            // Mobile legend panel
+            function buildMobileLegend() {
+                document.getElementById('legend-panel').innerHTML = buildLegendHTML();
+            }
+            window._buildMobileLegend = buildMobileLegend;
+
+            // Desktop layer control
             L.control.layers(
                 { "Carto Light": baseMap },
                 {
-                    "All Countries": allCountriesLayer,
-                    "MSF Locations": msfLayer,
-                    "Major Refugee Origins": top5Layer,
-                    "All Refugee Origins": bubbleLayer,
-                    
+                    "All Countries":      layers.all,
+                    "MSF Locations":      layers.msf,
+                    "Major Refugee Origins": layers.majors,
+                    "All Refugee Origins":   layers.bubbles,
                 }
             ).addTo(map);
 
         })
         .catch(err => console.error("Failed to load data:", err));
+
+        // Patch closeIntro to also build mobile legend after data loads
+        const _origClose = closeIntro;
+        window.closeIntro = function() {
+            document.getElementById('intro-overlay').style.display = 'none';
+            if (!isMobile() && legendControl) legendControl.addTo(map);
+            if (isMobile() && window._buildMobileLegend) window._buildMobileLegend();
+        };
 
     </script>
 </body>
